@@ -102,6 +102,62 @@ vr = function(){
 
 # GENERIC SMALL HELPERS ----------------------------------------------
 
+# nicely report a metafor or robumeta object with optional suffix to denote which model
+report_meta = function(.mod,
+                       .mod.type = "rma",  # "rma" or "robu"
+                       .suffix = "") {
+  
+  if ( !is.null(.mod) ) {
+    
+    
+    if ( .mod.type == "rma" ) {
+      # uses Q-profile intervals
+      # from here (https://wviechtb.github.io/metafor/reference/confint.rma.html):
+      # For objects of class "rma.uni" obtained with the rma.uni function, a confidence interval for the amount of (residual) heterogeneity (i.e., 𝜏2
+      # ) can be obtained by setting random=TRUE (which is the default). The interval is obtained iteratively either via the Q-profile method or via the generalized Q-statistic method (Hartung and Knapp, 2005; Viechtbauer, 2007; Jackson, 2013; Jackson et al., 2014). The latter is automatically used when the model was fitted with method="GENQ" or method="GENQM", the former is used in all other cases.
+      x = confint(.mod)
+      tau.lb = x$random["tau","ci.lb"]
+      tau.ub = x$random["tau","ci.ub"]
+      
+      # alternative Wald-type CIs:
+      #tau.CI = tau_CI(.mod)
+      
+      .res = data.frame( .mod$b,
+                         .mod$ci.lb,
+                         .mod$ci.ub,
+                         
+                         sqrt(.mod$tau2) )
+    } 
+    
+    
+    if ( .mod.type == "robu" ) {
+      
+      .res = data.frame( .mod$b.r,
+                         .mod$reg_table$CI.L,
+                         .mod$reg_table$CI.U,
+                         
+                         sqrt(.mod$mod_info$tau.sq) )
+    } 
+    
+  } else {
+    .res = data.frame( rep(NA, 6) )
+  }
+  
+  #### Specific to Valentine:
+  names(.res) = paste( c("EstFish", "LoFish", "HiFish", "TauFish"), .suffix, sep = "" )
+  
+  # also transform back to Pearson's R
+  .res$EstR = MetaUtility::z_to_r(.res$EstFish)
+  .res$LoR = MetaUtility::z_to_r(.res$LoFish)
+  .res$HiR = MetaUtility::z_to_r(.res$HiFish)
+  #### End of Valentine-specific code
+  
+  
+  row.names(.res) = NULL
+  
+  return( list(stats = .res) )
+}
+
 # quick mean with NAs removed
 meanNA = function(x){
   mean(x, na.rm = TRUE)
@@ -113,7 +169,7 @@ medNA = function(x){
 }
 
 # quick length(unique) equivalent
-uni = function(x){
+nuni = function(x){
   length(unique(x))
 }
 
@@ -169,6 +225,7 @@ format_CI = function( lo, hi, digits ) {
   paste( "[", my_round( lo, digits ), ", ", my_round( hi, digits ), "]", sep="" )
 }
 
+# S-value for meta-analysis publication bias
 # round down to nearest integer
 format_sval = function( sval, digits ) {
   if ( as.character(sval) == "--" ) return("Already NS")
