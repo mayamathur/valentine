@@ -75,7 +75,7 @@ options(scipen=999)
 
 # SANITY CHECKS ---------------------------------------------------------------
 
-# check counts
+# check counts vs. protocol:
 # "103 effect sizes from 56 independent samples nested in 36 studies"
 expect_equal(103, nrow(do))
 expect_equal(36, nuni(do$study_id))
@@ -83,11 +83,37 @@ expect_equal(56, nuni(do$sample_id))
 
 CreateTableOne(data = do)
 
+sort(do$n)
+sort(do$corr)
+
+plot(do$n, do$corr)
+
+# number of estimates per study
+t = do %>% group_by(study_id) %>%
+  summarise(count = n()) %>%
+  arrange(count)
+as.data.frame(t)
+
+# number of estimates by race
+t = do %>% group_by(study_id) %>%
+  summarise( count = n(),
+             count_black = length( corr[`race (0 = Black)` == 0] ),
+             count_white = length( corr[`race (0 = Black)` == 1] ) ) %>%
+  arrange(count)
+as.data.frame(t)
+
+
+t = do %>% group_by(study_id) %>%
+  summarise( count_black = mean(corr) ) %>%
+  arrange(count_black)
+as.data.frame(t)
 
 
 # RECODE VARIABLES ---------------------------------------------------------------
 
 summary(do$corr)
+
+# ~ Fisher's z  -------------------------------------------------
 
 # Fisher's z with "o"riginal coding (not reverse-coded)
 ES = escalc(measure = "ZCOR", ri = do$corr, ni = do$n)
@@ -101,22 +127,50 @@ do$sei = sqrt(do$vi)
 do$yir = do$yio
 do$yir[ do$valence == "negative" ] = -do$yir[ do$valence == "negative" ]
 
-
+# race indicator
 do$white = (do$`race (0 = Black)` == 1)
 
 
-# basic forest plot as sanity check
-m = rma.uni(yi = do$yir,
+# basic funnel as sanity check
+m = rma(yi = do$yir,
             vi = do$vi,
             slab = do$sample_id)
 
+funnel(m)
+
+# why are 3 SEs exactly 1.00?
+sort(do$vi)
+do %>% filter(vi == 1)
+# okay, this makes sense because they all have n=4, and for Fisher's z, vi <- 1 / (ni-3) approximately
+# see https://github.com/cran/metafor/blob/master/R/escalc.r
+
 forest(m)
+
+
+# ~ Pearson's r (for post hoc analyses)  -------------------------------------------------
+
+# doing this because of the variance estimation issue for the n=4 studies
+d2 = do
+ES = escalc(measure = "COR", ri = d2$corr, ni = d2$n)
+d2$yio = ES$yi
+d2$vi = ES$vi
+d2$sei = sqrt(d2$vi)
+
+# reverse-coding
+d2$yir = d2$yio
+d2$yir[ d2$valence == "negative" ] = -d2$yir[ d2$valence == "negative" ]
+
+# compare vi's to those from Fisher's z
+# can differ quite a lot for the very large variances
+plot(do$vi, d2$vi)
+plot(do$vi, do$vi - d2$vi)
 
 
 # WRITE DATA ------------------------------------------------
 
 setwd(data.dir)
 fwrite(do, "valentine_data_prepped.csv")
+fwrite(d2, "valentine_data_prepped_rscale.csv")
 
 
 

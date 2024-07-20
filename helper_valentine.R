@@ -21,7 +21,7 @@ my_ggsave = function(name,
             plot = .plot,
             width = .width,
             height = .height,
-            device = "pdf" )
+            device = "png" )
   }
 }
 
@@ -105,6 +105,7 @@ vr = function(){
 # nicely report a metafor or robumeta object with optional suffix to denote which model
 report_meta = function(.mod,
                        .mod.type = "rma",  # "rma" or "robu"
+                       .analysis,  # from global variable ("zscale" or "rscale")
                        .suffix = "") {
   
   if ( !is.null(.mod) ) {
@@ -135,6 +136,7 @@ report_meta = function(.mod,
       .res = data.frame( .mod$b.r,
                          .mod$reg_table$CI.L,
                          .mod$reg_table$CI.U,
+                         .mod$reg_table$prob,
                          
                          sqrt(.mod$mod_info$tau.sq) )
     } 
@@ -144,12 +146,18 @@ report_meta = function(.mod,
   }
   
   #### Specific to Valentine:
-  names(.res) = paste( c("EstFish", "LoFish", "HiFish", "TauFish"), .suffix, sep = "" )
+  if ( .analysis == "zscale" ) {
+    names(.res) = paste( c("EstFish", "LoFish", "HiFish", "EstPval", "TauFish"), .suffix, sep = "" )
+    
+    # also transform back to Pearson's R
+    .res$EstR = MetaUtility::z_to_r(.res$EstFish)
+    .res$LoR = MetaUtility::z_to_r(.res$LoFish)
+    .res$HiR = MetaUtility::z_to_r(.res$HiFish)
+  }
   
-  # also transform back to Pearson's R
-  .res$EstR = MetaUtility::z_to_r(.res$EstFish)
-  .res$LoR = MetaUtility::z_to_r(.res$LoFish)
-  .res$HiR = MetaUtility::z_to_r(.res$HiFish)
+  if ( .analysis == "rscale" ) {
+    names(.res) = paste( c("EstR", "LoR", "HiR", "EstPval", "TauR"), .suffix, sep = "" )
+  }
   #### End of Valentine-specific code
   
   
